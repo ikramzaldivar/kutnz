@@ -1,0 +1,5 @@
+# Copia este archivo como terraform.tfvars (está en .gitignore) y llena los valores.
+alert_email           = "tu-correo@ejemplo.com"
+create_hosted_zone    = false   # true si kut.nz todavía no tiene zona en Route 53
+safe_browsing_api_key = ""      # API key de Google Safe Browsing
+image_tag             = "latest"
