@@ -127,9 +127,29 @@ def test_preview_bots_do_not_burn_single_use_links(env):
     assert client.get(f"/{link['code']}", headers=BROWSER).status_code == 302
 
 
-def test_click_limit_is_exact_under_concurrency(env):
+def test_click_limit_is_exact_under_concurrency(env, monkeypatch):
     client, _ = env
     link = create(client, {"url": "https://a.com", "max_clicks": 20}, auth())
+    # DynamoDB evalúa la condición y escribe de forma atómica; moto no (con hilos deja pasar de más, lo
+    # comprobamos sin la app). El candado hace que moto se comporte como DynamoDB real; la app sigue
+    # compitiendo entre hilos, así que la prueba falla si el límite se revisara en la app y no en la BD.
+    import threading
+
+    from app import store
+    real_table, lock = store.links_table, threading.Lock()
+
+    class AtomicTable:
+        def __init__(self, table):
+            self._t = table
+
+        def __getattr__(self, name):
+            return getattr(self._t, name)
+
+        def update_item(self, **kw):
+            with lock:
+                return self._t.update_item(**kw)
+
+    monkeypatch.setattr(store, "links_table", lambda: AtomicTable(real_table()))
     with ThreadPoolExecutor(max_workers=16) as pool:
         results = list(pool.map(lambda _: client.get(f"/{link['code']}", headers=BROWSER).status_code, range(80)))
     assert results.count(302) == 20 and results.count(410) == 60
