@@ -44,12 +44,21 @@ class Settings(BaseSettings):
     # 'none' en producción (anti-clickjacking); el servidor local usa 'self' para revisar vistas móviles en iframes.
     frame_ancestors: str = "'none'"
 
+    # Dominios públicos alternos con los que también funciona el sitio, p. ej. el de CloudFront
+    # (dxxxx.cloudfront.net). La red del ITESO bloquea dominios recién registrados como kut.nz.
+    alt_public_hosts: str = ""
+
     serve_static_locally: bool = True
     static_base_url: str = "/static"
 
     @property
     def base_url(self) -> str:
         return f"{self.public_scheme}://{self.public_host}"
+
+    @property
+    def public_hosts(self) -> set[str]:
+        hosts = {self.public_host.lower(), f"www.{self.public_host.lower()}"}
+        return hosts | {h.strip().lower() for h in self.alt_public_hosts.split(",") if h.strip()}
 
     @property
     def self_hosts(self) -> set[str]:

@@ -1,5 +1,6 @@
 """Reglas de negocio de los enlaces (independientes de HTTP)."""
 import time
+from contextvars import ContextVar
 from datetime import datetime, timezone
 
 from . import cache, codes, security, store
@@ -63,8 +64,20 @@ def status_of(link: dict, t: int | None = None) -> str:
     return "activo"
 
 
+# Dominio público por el que llegó la petición actual (lo fija el middleware de main.py).
+request_host: ContextVar[str | None] = ContextVar("request_host", default=None)
+
+
+def current_host() -> str:
+    return request_host.get() or get_settings().public_host
+
+
+def base_url() -> str:
+    return f"{get_settings().public_scheme}://{current_host()}"
+
+
 def short_url(code: str) -> str:
-    return f"{get_settings().base_url}/{code}"
+    return f"{base_url()}/{code}"
 
 
 def public_view(link: dict) -> dict:

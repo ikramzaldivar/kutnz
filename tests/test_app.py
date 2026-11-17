@@ -160,8 +160,8 @@ def test_password_flow(env):
     link = create(client, {"url": "https://secreto.com", "password": "abcd1234"}, auth())
     form = client.get(f"/{link['code']}", headers=BROWSER)
     assert form.status_code == 200 and "secreto.com" not in form.text
-    assert client.post(f"/{link['code']}", data={"password": "mal"}, headers=BROWSER).status_code == 401
-    ok = client.post(f"/{link['code']}", data={"password": "abcd1234"}, headers=BROWSER)
+    assert client.post(f"/unlock/{link['code']}", data={"password": "mal"}, headers=BROWSER).status_code == 401
+    ok = client.post(f"/unlock/{link['code']}", data={"password": "abcd1234"}, headers=BROWSER)
     assert ok.status_code == 302 and ok.headers["location"] == "https://secreto.com"
     # vista previa no revela el destino
     assert "secreto.com" not in client.get(f"/{link['code']}+").text
@@ -170,7 +170,7 @@ def test_password_flow(env):
 def test_password_bruteforce_limited_and_failed_attempt_not_counted(env):
     client, _ = env
     link = create(client, {"url": "https://s.com", "password": "abcd1234", "max_clicks": 1}, auth())
-    statuses = [client.post(f"/{link['code']}", data={"password": "x"}, headers=BROWSER).status_code
+    statuses = [client.post(f"/unlock/{link['code']}", data={"password": "x"}, headers=BROWSER).status_code
                 for _ in range(6)]
     assert statuses[:5] == [401] * 5 and statuses[5] == 429
     detail = client.get(f"/api/v1/links/{link['code']}", headers=auth()).json()["data"]
@@ -253,3 +253,14 @@ def test_redis_down_opens_circuit_and_redirect_still_works(env, monkeypatch):
     monkeypatch.setattr(cache, "_open_until", 0.0)  # pasa el tiempo de espera: se vuelve a intentar
     client.get(f"/{link['code']}", headers=BROWSER)
     assert len(calls) > tried
+
+
+def test_short_url_uses_the_public_domain_of_the_request(env):
+    client, _ = env
+    # Por el dominio de CloudFront (la red del ITESO bloquea kut.nz) la URL corta y el QR usan ese dominio.
+    link = create(client, {"url": "https://a.com"}, {"Host": "d111.cloudfront.net"})
+    assert link["short_url"] == f"https://d111.cloudfront.net/{link['code']}"
+    assert client.get("/api/v1/config", headers={"Host": "d111.cloudfront.net"}).json()["data"]["host"] == "d111.cloudfront.net"
+    # Por kut.nz, o por un host que no es público (p. ej. el ALB), se usa kut.nz.
+    assert create(client, {"url": "https://b.com"}, {"Host": "kut.nz"})["short_url"].startswith("https://kut.nz/")
+    assert create(client, {"url": "https://c.com"}, {"Host": "alb.internal"})["short_url"].startswith("https://kut.nz/")

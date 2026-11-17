@@ -369,7 +369,7 @@ function linkRow(l) {
     l.disabled ? "Reactivar" : "Desactivar");
   const row = h("div", { class: "link-row", "data-code": l.code },
     h("div", {},
-      h("div", {}, h("span", { class: "code" }, `kut.nz/${l.code}`), badge,
+      h("div", {}, h("span", { class: "code" }, `${CONFIG.host}/${l.code}`), badge,
         l.has_password ? h("span", { class: "badge", title: "Con contraseña" }, "🔒") : null),
       l.title ? h("div", { class: "meta" }, l.title) : null,
       h("div", { class: "target" }, l.target),
@@ -381,7 +381,7 @@ function linkRow(l) {
       h("button", { class: "btn btn-ghost btn-small", onclick: () => editLink(ref.l) }, "Editar"),
       toggle,
       h("button", { class: "btn btn-ghost btn-small", onclick: async () => {
-        if (!confirm(`¿Borrar kut.nz/${ref.l.code}? Esta acción no se puede deshacer.`)) return;
+        if (!confirm(`¿Borrar ${CONFIG.host}/${ref.l.code}? Esta acción no se puede deshacer.`)) return;
         await api(`/api/v1/links/${ref.l.code}`, { method: "DELETE" }); loadPanel();
       } }, "Borrar")));
   row.patch = (n) => {
@@ -398,7 +398,7 @@ function linkRow(l) {
 }
 
 function showQr(l) {
-  openModal(`QR de kut.nz/${l.code}`, h("div", { style: "text-align:center" },
+  openModal(`QR de ${CONFIG.host}/${l.code}`, h("div", { style: "text-align:center" },
     h("img", { src: l.qr_svg, alt: `QR de ${l.short_url}`, style: "width:260px;height:260px" }),
     h("p", { class: "hint" }, "El QR apunta al enlace corto: sigue funcionando aunque cambies el destino."),
     h("div", { class: "row", style: "justify-content:center" },
@@ -429,7 +429,7 @@ function editLink(l) {
       $("#modal").close(); loadPanel();
     } catch (e) { const er = $("#e-err"); er.textContent = e.message; er.hidden = false; }
   });
-  openModal(`Editar kut.nz/${l.code}`, form);
+  openModal(`Editar ${CONFIG.host}/${l.code}`, form);
 }
 
 function breakdown(title, obj) {
@@ -454,7 +454,7 @@ function stopStats() {
 
 async function showStats(l) {
   stopStats();
-  openModal(`Métricas de kut.nz/${l.code}`, h("p", {}, "Cargando…"));
+  openModal(`Métricas de ${CONFIG.host}/${l.code}`, h("p", {}, "Cargando…"));
   const modal = $("#modal");
   modal.addEventListener("close", stopStats, { once: true });
   await refreshStats(l);
@@ -512,7 +512,7 @@ async function refreshStats(l) {
 async function loadAdmin() {
   const { data } = await api("/api/v1/admin/reports");
   $("#reports").replaceChildren(...(data.length ? data.map((r) => h("div", { class: "link-row" },
-    h("div", {}, h("span", { class: "code" }, `kut.nz/${r.code}`), h("div", { class: "meta" }, `${fmtDate(r.created_at)} · ${r.reason || "sin motivo"}`)),
+    h("div", {}, h("span", { class: "code" }, `${CONFIG.host}/${r.code}`), h("div", { class: "meta" }, `${fmtDate(r.created_at)} · ${r.reason || "sin motivo"}`)),
     h("div", { class: "row" },
       h("a", { class: "btn btn-ghost btn-small", href: `/${r.code}+`, target: "_blank", rel: "noopener" }, "Ver destino"),
       h("button", { class: "btn btn-dark btn-small", onclick: async (e) => {

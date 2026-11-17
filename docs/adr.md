@@ -38,7 +38,8 @@ Cada decisión dice qué elegimos, qué descartamos y **qué perdemos**. Formato
 - **Costo:** entrega al-menos-una-vez → un reintento puede contar doble en los contadores (los visitantes únicos son un conjunto, idempotente). Aceptable para métricas.
 
 ## ADR-0007 · ALB administrado en lugar de HAProxy en EC2
-- **Decisión:** Application Load Balancer en dos AZ, algoritmo *least outstanding requests*, health checks cada 10 s.
+- **Decisión:** Application Load Balancer en dos AZ, algoritmo *weighted random* con *anomaly mitigation*, health checks cada 5 s. Empezamos con *least outstanding requests*, pero en la prueba de caos una instancia muerta respondía al instante y parecía la menos ocupada.
+- **Reintento en el borde:** CloudFront usa un origin group (el mismo ALB dos veces) que repite las visitas GET/HEAD si el ALB responde 502/503/504. Bajó los errores al caer una zona de 511 a 236; no llega a cero porque el reintento puede volver a caer en la instancia muerta.
 - **Por qué:** el laboratorio de HAProxy en una VM era un SPOF; el ALB es redundante por diseño y se integra con el ASG.
 - **Costo:** menos control fino que `haproxy.cfg`; ~16 USD/mes fijos.
 

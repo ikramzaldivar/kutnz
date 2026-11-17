@@ -43,7 +43,12 @@ NO_STORE = {"Cache-Control": "private, no-store, max-age=0"}
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     started = time.perf_counter()
-    response = await call_next(request)
+    host = request.headers.get("host", "").split(":")[0].lower()
+    token = links.request_host.set(host if host in settings.public_hosts else None)
+    try:
+        response = await call_next(request)
+    finally:
+        links.request_host.reset(token)
     if request.url.path == "/api/docs":
         # Swagger UI (documentación interactiva) carga su JS/CSS desde jsdelivr y usa un script en línea.
         # Política más permisiva SOLO para esta página, que no muestra datos de usuarios.
@@ -306,8 +311,8 @@ def admin_unblock_user(user_id: str, _: User = Depends(require_admin)):
 @app.get("/api/v1/config", tags=["sistema"])
 def frontend_config():
     return envelope({
-        "base_url": settings.base_url,
-        "host": settings.public_host,
+        "base_url": links.base_url(),
+        "host": links.current_host(),
         "auth_mode": settings.auth_mode,
         "cognito_domain": settings.cognito_domain,
         "cognito_client_id": settings.cognito_client_id,
@@ -440,7 +445,8 @@ def visit(raw_code: str, request: Request, background: BackgroundTasks):
     return complete_visit(request, view, background)
 
 
-@app.post("/{raw_code}", include_in_schema=False)
+# POST en /unlock/: CloudFront solo puede reintentar GET/HEAD, así que los POST van por su propia ruta.
+@app.post("/unlock/{raw_code}", include_in_schema=False)
 def visit_with_password(raw_code: str, request: Request, background: BackgroundTasks, password: str = Form("")):
     code = codes.normalize(raw_code)
     view = resolve(code)
@@ -473,6 +479,6 @@ def preview(request: Request, raw_code: str):
          # Un enlace con contraseña no revela su destino en la vista previa.
          "target": None if protected else link["target"],
          "host": None if protected else urlsplit(link["target"]).hostname,
-         "status": links.status_of(link), "has_password": protected, "base": settings.base_url},
+         "status": links.status_of(link), "has_password": protected, "base": links.base_url()},
         headers=NO_STORE,
     )

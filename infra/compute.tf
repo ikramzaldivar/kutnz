@@ -102,6 +102,7 @@ locals {
     KUT_PUBLIC_HOST          = var.domain
     KUT_PUBLIC_SCHEME        = "https"
     KUT_EXTRA_SELF_HOSTS     = "${local.origin_host},${aws_cloudfront_distribution.main.domain_name}"
+    KUT_ALT_PUBLIC_HOSTS     = aws_cloudfront_distribution.main.domain_name
     KUT_AWS_REGION           = var.region
     KUT_TABLE_LINKS          = aws_dynamodb_table.links.name
     KUT_TABLE_STATS          = aws_dynamodb_table.stats.name

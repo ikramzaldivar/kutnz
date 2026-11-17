@@ -3,6 +3,7 @@ import os
 os.environ.update({
     "AWS_ACCESS_KEY_ID": "test", "AWS_SECRET_ACCESS_KEY": "test", "AWS_DEFAULT_REGION": "us-east-1",
     "KUT_AUTH_MODE": "dev", "KUT_PUBLIC_HOST": "kut.nz", "KUT_EXTRA_SELF_HOSTS": "d111.cloudfront.net",
+    "KUT_ALT_PUBLIC_HOSTS": "d111.cloudfront.net",
 })
 
 import boto3  # noqa: E402

@@ -59,8 +59,11 @@ resource "aws_lb_target_group" "app" {
   protocol             = "HTTP"
   vpc_id               = aws_vpc.main.id
   deregistration_delay = 15
-  # Least outstanding requests: manda la petición a la instancia con menos trabajo pendiente.
-  load_balancing_algorithm_type = "least_outstanding_requests"
+  # Weighted random + anomaly mitigation: si una instancia empieza a fallar, el ALB le baja el peso sin
+  # esperar al health check. Con least outstanding requests, una instancia muerta (responde al instante)
+  # parecía la menos ocupada y recibía más tráfico.
+  load_balancing_algorithm_type     = "weighted_random"
+  load_balancing_anomaly_mitigation = "on"
   health_check {
     path                = "/healthz"
     interval            = 5 # medimos ≈ 30 s de errores al caer una AZ con 10 s; con 5 s la ventana baja a la mitad
@@ -288,21 +291,68 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
+  # Mismo ALB como segundo origen: si el primero responde 502/503/504 (por ejemplo, una instancia que
+  # murió de golpe al caer una zona), CloudFront repite la petición y casi siempre cae en una sana.
+  origin {
+    origin_id   = "alb-reintento"
+    domain_name = local.origin_host
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+      origin_read_timeout    = 15
+    }
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = random_password.origin_secret.result
+    }
+  }
+
+  origin_group {
+    origin_id = "alb-con-reintento"
+    failover_criteria {
+      status_codes = [502, 503, 504]
+    }
+    member {
+      origin_id = "alb"
+    }
+    member {
+      origin_id = "alb-reintento"
+    }
+  }
+
   origin {
     origin_id                = "static"
     domain_name              = aws_s3_bucket.static.bucket_regional_domain_name
     origin_access_control_id = aws_cloudfront_origin_access_control.static.id
   }
 
-  # Redirección y API: sin caché en el borde (302 no-store; cada visita debe contarse).
+  # Redirección y páginas: sin caché en el borde (302 no-store; cada visita debe contarse) y con
+  # reintento automático en el segundo origen. Un origin group solo admite GET/HEAD/OPTIONS.
   default_cache_behavior {
-    target_origin_id         = "alb"
+    target_origin_id         = "alb-con-reintento"
     viewer_protocol_policy   = "redirect-to-https"
-    allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    allowed_methods          = ["GET", "HEAD", "OPTIONS"]
     cached_methods           = ["GET", "HEAD"]
     cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_cf.id
     compress                 = true
+  }
+
+  # API y formulario de contraseña: todos los métodos, directo al ALB (un POST no se reintenta solo).
+  dynamic "ordered_cache_behavior" {
+    for_each = ["/api/*", "/unlock/*"]
+    content {
+      path_pattern             = ordered_cache_behavior.value
+      target_origin_id         = "alb"
+      viewer_protocol_policy   = "redirect-to-https"
+      allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+      cached_methods           = ["GET", "HEAD"]
+      cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
+      origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_cf.id
+      compress                 = true
+    }
   }
 
   # Recursos estáticos: CDN con caché.
